@@ -1,0 +1,22 @@
+{
+  "window": {
+    "title": "MedBot Assistant",
+    "geometry": "1160x760",
+    "minsize": [920, 620]
+  },
+  "models": [
+    "gpt-4.1-mini",
+    "gpt-4.1"
+  ],
+  "defaults": {
+    "top_k_matches": 5
+  },
+  "colors": {
+    "bg": "#0F1F2E",
+    "panel": "#F7F9FC",
+    "border": "#D5DCE6",
+    "muted_text": "#566274",
+    "primary_text": "#1E2735",
+    "accent": "#0A84FF"
+  }
+}
