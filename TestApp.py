@@ -9,14 +9,12 @@ from openai import OpenAI
 
 from dataset_service import DeidentifiedDataset
 
-# Optional hardcoded key fallback.
-# If OPENAI_API_KEY env var exists, it is used first.
-HARDCODED_OPENAI_API_KEY = "sk-proj-ZwOtosF1jW8pmwRlz5iST3BlbkFJ5BfxYR8L108DF6ALNfNf"
 DATASET_CANDIDATE_PATHS = [
     r"c:\Users\jtr06\Downloads\Deidentified Data Set 2.xlsx",
     os.path.join(os.path.dirname(__file__), "Deidentified Data Set 2.xlsx"),
 ]
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "app_config.json")
+ENV_PATH = os.path.join(os.path.dirname(__file__), ".env")
 
 
 def load_config() -> dict:
@@ -46,9 +44,28 @@ def load_config() -> dict:
         return defaults
 
 
+def load_local_env(path: str) -> None:
+    if not os.path.exists(path):
+        return
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            for raw_line in f:
+                line = raw_line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                key = key.strip()
+                value = value.strip().strip('"').strip("'")
+                if key and key not in os.environ:
+                    os.environ[key] = value
+    except Exception:
+        pass
+
+
 class MedBotApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
+        load_local_env(ENV_PATH)
         self.config = load_config()
         self.colors = self.config["colors"]
         self.is_busy = False
@@ -352,9 +369,9 @@ class MedBotApp:
 
     def get_ai_response(self, prompt: str, context: str) -> None:
         try:
-            api_key = os.getenv("OPENAI_API_KEY") or HARDCODED_OPENAI_API_KEY
+            api_key = os.getenv("OPENAI_API_KEY")
             if not api_key:
-                raise RuntimeError("No API key found.")
+                raise RuntimeError("No API key found. Add OPENAI_API_KEY to your local .env file.")
 
             client = OpenAI(api_key=api_key)
             result = client.responses.create(
