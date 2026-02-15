@@ -15,7 +15,7 @@ DATASET_CANDIDATE_PATHS = [
 ]
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "app_config.json")
 ENV_PATH = os.path.join(os.path.dirname(__file__), ".env")
-
+API_KEY_FILE_PATH = os.path.join(os.path.dirname(__file__), "PrivateKey.txt")
 
 def load_config() -> dict:
     defaults = {
@@ -62,14 +62,38 @@ def load_local_env(path: str) -> None:
         pass
 
 
+def load_api_key_file(path: str) -> None:
+    if not os.path.exists(path):
+        return
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read().strip()
+        if not content:
+            return
+        if "=" in content:
+            for raw_line in content.splitlines():
+                line = raw_line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                key = key.strip()
+                value = value.strip().strip('"').strip("'")
+                if key:
+                    os.environ[key] = value
+        else:
+            os.environ["OPENAI_API_KEY"] = content
+    except Exception:
+        pass
+
+
 class MedBotApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         load_local_env(ENV_PATH)
+        load_api_key_file(API_KEY_FILE_PATH)
         self.config = load_config()
         self.colors = self.config["colors"]
         self.is_busy = False
-        self.logo_img = None
         self.matches: list[dict] = []
 
         self.root.title(self.config["window"]["title"])
@@ -79,7 +103,6 @@ class MedBotApp:
 
         self.dataset = DeidentifiedDataset(DATASET_CANDIDATE_PATHS)
         self._build_ui()
-        self._load_logo()
         self.load_dataset()
 
     def _build_ui(self) -> None:
@@ -96,9 +119,6 @@ class MedBotApp:
 
         subtitle = ttk.Label(top, text="Advanced triage support with dataset-assisted context", style="Muted.TLabel")
         subtitle.grid(row=1, column=0, sticky="w")
-
-        self.logo_label = tk.Label(top, bg=self.colors["panel"], bd=0)
-        self.logo_label.grid(row=0, column=4, rowspan=2, sticky="e", padx=(10, 0))
 
         self.fixed_model = self.config["models"][0] if self.config["models"] else "gpt-4.1-mini"
         self.fixed_top_k = max(1, min(10, int(self.config["defaults"].get("top_k_matches", 5))))
@@ -246,21 +266,6 @@ class MedBotApp:
         self.chat.tag_configure("bot_body", foreground=self.colors["primary_text"], lmargin1=10, lmargin2=10, background="#EFF3F8")
         self.chat.tag_configure("error", foreground="#B42318", font=("Segoe UI", 10, "italic"))
 
-    def _load_logo(self) -> None:
-        logo_path = os.path.join(os.path.dirname(__file__), "assets", "jobsitecare-logo.png")
-        if not os.path.exists(logo_path):
-            return
-        img = tk.PhotoImage(file=logo_path)
-        max_w = 180
-        max_h = 48
-        scale_w = max(1, (img.width() + max_w - 1) // max_w)
-        scale_h = max(1, (img.height() + max_h - 1) // max_h)
-        scale = max(scale_w, scale_h)
-        if scale > 1:
-            img = img.subsample(scale, scale)
-        self.logo_img = img
-        self.logo_label.configure(image=self.logo_img)
-
     def _submit_shortcut(self, _event: tk.Event) -> str:
         self.on_submit()
         return "break"
@@ -371,7 +376,7 @@ class MedBotApp:
         try:
             api_key = os.getenv("OPENAI_API_KEY")
             if not api_key:
-                raise RuntimeError("No API key found. Add OPENAI_API_KEY to your local .env file.")
+                raise RuntimeError("No API key found. Add OPENAI_API_KEY to PrivateKey.txt.")
 
             client = OpenAI(api_key=api_key)
             result = client.responses.create(

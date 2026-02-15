@@ -110,7 +110,7 @@ class DeidentifiedDataset:
         scored.sort(key=lambda item: item[0], reverse=True)
         result: list[dict[str, Any]] = []
         for score, record in scored[:top_k]:
-            item = dict(record)
+            item = {k: v for k, v in record.items() if k != "tokens"}
             item["score"] = score
             result.append(item)
         return result
