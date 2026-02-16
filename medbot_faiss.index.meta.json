@@ -1,0 +1,8 @@
+{
+  "fingerprint": "1c737c55e063f977a01d2d438ad855ffabcd0019c4936cca19cfe3cbe782938e",
+  "indexed_chunks": 3582,
+  "embedding_model": "text-embedding-3-small",
+  "chunk_size_chars": 800,
+  "chunk_overlap_chars": 120,
+  "dataset_path": "c:\\Users\\jtr06\\Downloads\\Deidentified Data Set 2.xlsx"
+}

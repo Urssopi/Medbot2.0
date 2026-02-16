@@ -22,13 +22,21 @@
       </header>
 
       <section class="layout">
+        <aside class="panel glass chats-panel">
+          <div class="panel-head panel-head-row">
+            <h2>Chats</h2>
+            <button id="new-chat-btn" class="new-chat-btn" type="button">+ New Chat</button>
+          </div>
+          <div id="conversation-tabs" class="conversation-tabs"></div>
+        </aside>
+
         <section class="panel glass chat-panel">
           <div class="panel-head">
             <h2>Conversation</h2>
           </div>
           <div id="chat-log" class="chat-log"></div>
           <form id="composer" class="composer" autocomplete="off">
-            <textarea id="message-input" placeholder="Describe symptoms or ask a medical question..." required></textarea>
+            <textarea id="message-input" placeholder="Describe symptoms and include age, sex/gender, duration, severity, meds, and allergies..." required></textarea>
             <button id="send-btn" type="submit">Send</button>
           </form>
           <p class="hint">Enter for newline, Shift+Enter to send.</p>

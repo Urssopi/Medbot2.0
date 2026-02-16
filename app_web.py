@@ -1,5 +1,6 @@
 import json
 import os
+import threading
 from typing import Any
 
 from flask import Flask, jsonify, render_template, request
@@ -21,6 +22,13 @@ def load_config() -> dict[str, Any]:
     defaults: dict[str, Any] = {
         "models": ["gpt-4.1-mini"],
         "defaults": {"top_k_matches": 5},
+        "rag": {
+            "embedding_model": "text-embedding-3-small",
+            "chunk_size_chars": 800,
+            "chunk_overlap_chars": 120,
+            "embedding_batch_size": 64,
+            "rebuild_index_on_startup": False,
+        },
     }
     if not os.path.exists(CONFIG_PATH):
         return defaults
@@ -82,9 +90,22 @@ load_api_key_file(API_KEY_FILE_PATH)
 CONFIG = load_config()
 MODEL = CONFIG["models"][0] if CONFIG["models"] else "gpt-4.1-mini"
 TOP_K = max(1, min(10, int(CONFIG["defaults"].get("top_k_matches", 5))))
+RAG_CONFIG = CONFIG.get("rag", {})
 
-DATASET = DeidentifiedDataset(DATASET_CANDIDATE_PATHS)
-DATASET_OK, DATASET_MESSAGE = DATASET.load()
+DATASET = DeidentifiedDataset(
+    DATASET_CANDIDATE_PATHS,
+    faiss_index_path=os.path.join(BASE_DIR, "medbot_faiss.index"),
+    embedding_model=str(RAG_CONFIG.get("embedding_model", "text-embedding-3-small")),
+    chunk_size_chars=int(RAG_CONFIG.get("chunk_size_chars", 800)),
+    chunk_overlap_chars=int(RAG_CONFIG.get("chunk_overlap_chars", 120)),
+    embedding_batch_size=int(RAG_CONFIG.get("embedding_batch_size", 64)),
+)
+DATASET_OK, DATASET_MESSAGE = DATASET.load(
+    api_key=os.getenv("OPENAI_API_KEY", "").strip(),
+    rebuild_index=bool(RAG_CONFIG.get("rebuild_index_on_startup", False)),
+)
+DATASET_LOCK = threading.Lock()
+REINDEXING = False
 
 app = Flask(__name__)
 
@@ -102,9 +123,46 @@ def status():
             "dataset_loaded": DATASET_OK,
             "dataset_message": DATASET_MESSAGE,
             "records": len(DATASET.records),
+            "rag_ready": DATASET.vector_ready,
+            "indexed_chunks": DATASET.indexed_chunks,
+            "rag_error": DATASET.last_error,
+            "reindexing": REINDEXING,
             "model": MODEL,
         }
     )
+
+
+@app.post("/api/reindex")
+def reindex():
+    global DATASET_OK, DATASET_MESSAGE, REINDEXING
+
+    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        return jsonify({"ok": False, "error": "Missing API key in PrivateKey.txt."}), 500
+
+    with DATASET_LOCK:
+        if REINDEXING:
+            return jsonify({"ok": False, "error": "Reindex already in progress."}), 409
+        REINDEXING = True
+
+    try:
+        ok, message = DATASET.load(api_key=api_key, rebuild_index=True)
+        DATASET_OK = ok
+        DATASET_MESSAGE = message
+        return jsonify(
+            {
+                "ok": ok,
+                "dataset_loaded": DATASET_OK,
+                "dataset_message": DATASET_MESSAGE,
+                "records": len(DATASET.records),
+                "rag_ready": DATASET.vector_ready,
+                "indexed_chunks": DATASET.indexed_chunks,
+                "rag_error": DATASET.last_error,
+            }
+        ), (200 if ok else 500)
+    finally:
+        with DATASET_LOCK:
+            REINDEXING = False
 
 
 @app.post("/api/chat")
@@ -117,6 +175,10 @@ def chat():
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
     if not api_key:
         return jsonify({"ok": False, "error": "Missing API key in PrivateKey.txt."}), 500
+    if REINDEXING:
+        return jsonify({"ok": False, "error": "RAG reindex in progress. Try again in a moment."}), 503
+    if not DATASET.vector_ready:
+        return jsonify({"ok": False, "error": f"RAG index is not ready. {DATASET_MESSAGE}"}), 500
 
     matches = DATASET.search(message, top_k=TOP_K)
     context = DATASET.build_context(matches)
@@ -144,4 +206,4 @@ def chat():
 
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=True)
+    app.run(host="127.0.0.1", port=5000, debug=True, use_reloader=False, load_dotenv=False)

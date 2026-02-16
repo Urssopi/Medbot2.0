@@ -11,6 +11,13 @@
   "defaults": {
     "top_k_matches": 5
   },
+  "rag": {
+    "embedding_model": "text-embedding-3-small",
+    "chunk_size_chars": 800,
+    "chunk_overlap_chars": 120,
+    "embedding_batch_size": 64,
+    "rebuild_index_on_startup": false
+  },
   "colors": {
     "bg": "#0F1F2E",
     "panel": "#F7F9FC",
